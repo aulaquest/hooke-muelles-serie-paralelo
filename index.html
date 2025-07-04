@@ -73,6 +73,23 @@
             pointer-events: none;
             z-index: 20;
         }
+        /* Estilo para el display de valores de fuerza */
+        .force-values-box {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(31, 41, 55, 0.8);
+            padding: 6px 12px;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.75rem; /* Tamaño de fuente reducido */
+            font-weight: 500;
+            border: 1px solid #4b5563;
+            pointer-events: none;
+            z-index: 20;
+            white-space: nowrap;
+        }
         .chronometer-box {
             position: absolute;
             top: 10px;
@@ -195,12 +212,12 @@
                 height: 100%;
             }
             .simulation-column {
-                height: 50vh; /* Ajustado para dar más espacio a la simulación */
+                height: 50vh; /* Ajustado a 50% */
                 flex-shrink: 0;
             }
             .controls-column {
                 width: 100%;
-                height: 50vh; /* Ajustado para ocupar el resto del espacio */
+                height: 50vh; /* Ajustado a 50% */
                 border-left: none;
                 border-top: 2px solid #374151;
             }
@@ -218,6 +235,7 @@
         <div class="simulation-column">
             <canvas id="simulation-canvas"></canvas>
             <div id="info-display" class="info-box"></div>
+            <div id="force-values-display" class="force-values-box hidden"></div>
             <div id="chronometer-container" class="chronometer-box hidden">
                 <div id="chronometer-time" class="text-white text-md font-semibold">0.0s</div>
                 <button id="chrono-pause-play-btn" title="Pausar/Reanudar">
@@ -305,6 +323,7 @@
                         <h3 class="text-lg font-semibold mb-2 text-white">Visualización</h3>
                         <div class="space-y-2">
                             <label class="flex items-center"><input type="checkbox" id="show-forces" class="form-checkbox" checked> <span class="ml-2">Vectores de Fuerza</span></label>
+                            <label class="flex items-center"><input type="checkbox" id="show-force-values" class="form-checkbox"> <span class="ml-2">Ver Valores de Fuerza</span></label>
                             <label class="flex items-center"><input type="checkbox" id="show-equilibrium-pos" class="form-checkbox" checked> <span class="ml-2">Posición de equilibrio</span></label>
                             <label class="flex items-center"><input type="checkbox" id="show-natural-length" class="form-checkbox"> <span class="ml-2">Longitud Natural del Sistema</span></label>
                             <label class="flex items-center"><input type="checkbox" id="show-ruler" class="form-checkbox"> <span class="ml-2">Regla</span></label>
@@ -367,10 +386,13 @@
             simulationState: 'initial',
             isDraggingMass: false,
             massDrag: { startY: 0, startPos: 0 },
-            showForces: true, showEquilibrium: true, showNaturalLength: false, showEnergyGraph: false, showChronometer: false, showRuler: false,
+            showForces: true, 
+            showForceValues: false, // Nuevo estado
+            showEquilibrium: true, showNaturalLength: false, showEnergyGraph: false, showChronometer: false, showRuler: false,
             pixelsPerMeter: 150,
-            zoom: 1.0, // Nivel de zoom manual
+            zoom: 1.0, 
             energies: { kinetic: 0, potentialG: 0, potentialE: 0, total: 0 },
+            forceValues: {}, // Nuevo estado para valores de fuerza
             potentialGRefY: 0,
             chronometerTime: 0,
             chronometerManualPause: false,
@@ -380,7 +402,8 @@
         // --- DOM ELEMENTS ---
         let startPauseBtn, resetSimulationBtn, energyChartOverlay,
             seriesBtn, parallelBtn, chronoContainer, chronoTimeEl,
-            chronoPausePlayBtn, chronoResetBtn, iconPause, iconPlay;
+            chronoPausePlayBtn, chronoResetBtn, iconPause, iconPlay,
+            forceValuesDisplay;
         
         function initEnergyChart() {
             const chartCtx = energyChartCanvas.getContext('2d');
@@ -434,7 +457,14 @@
                 document.getElementById('damping-value').textContent = val < 10 ? 'Bajo' : (val < 30 ? 'Medio' : 'Alto');
             });
 
-            document.getElementById('show-forces').addEventListener('change', (e) => state.showForces = e.target.checked);
+            document.getElementById('show-forces').addEventListener('change', (e) => {
+                state.showForces = e.target.checked;
+                updateForceValueVisibility();
+            });
+            document.getElementById('show-force-values').addEventListener('change', (e) => {
+                state.showForceValues = e.target.checked;
+                updateForceValueVisibility();
+            });
             document.getElementById('show-equilibrium-pos').addEventListener('change', (e) => state.showEquilibrium = e.target.checked);
             document.getElementById('show-natural-length').addEventListener('change', (e) => state.showNaturalLength = e.target.checked);
             document.getElementById('show-ruler').addEventListener('change', (e) => state.showRuler = e.target.checked);
@@ -466,6 +496,11 @@
             canvas.addEventListener('touchend', handleMouseUp);
 
             setupChartDrag();
+        }
+
+        function updateForceValueVisibility() {
+            const shouldShow = state.showForces && state.showForceValues;
+            forceValuesDisplay.classList.toggle('hidden', !shouldShow);
         }
 
         function setConfigMode(mode) {
@@ -556,17 +591,17 @@
             if (state.simulationState === 'initial') {
                 state.simulationState = 'running';
                 startPauseBtn.textContent = 'Pausar';
-                startPauseBtn.className = 'w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors';
+                startPauseBtn.className = 'w-full mt-2 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors';
                 setEnergyChartScale();
                 resetChronometer();
             } else if (state.simulationState === 'running') {
                 state.simulationState = 'paused';
                 startPauseBtn.textContent = 'Reanudar';
-                startPauseBtn.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors';
+                startPauseBtn.className = 'w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors';
             } else if (state.simulationState === 'paused') {
                 state.simulationState = 'running';
                 startPauseBtn.textContent = 'Pausar';
-                startPauseBtn.className = 'w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors';
+                startPauseBtn.className = 'w-full mt-2 bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors';
             }
         }
 
@@ -675,6 +710,7 @@
                 drawParallel();
             }
             updateInfoBox();
+            updateForceValuesDisplay();
         }
 
         function drawSeries() {
@@ -701,17 +737,17 @@
             if(s.showNaturalLength) {
                 drawDashedLine(0, START_Y + L0_total * ppm, width, START_Y + L0_total * ppm, '#06b6d4', 'L₀ Total');
             }
+            
+            const Fg = s.mass * s.gravity;
+            const Fe_total = k_eq * (s.position - L0_total);
+            s.forceValues = { Fg: Fg, 'Fₖ,eq': -Fe_total };
+
             if (s.showForces) {
-                const Fg = s.mass * s.gravity;
-                const Fe_total = k_eq * totalElongation;
                 const vector_scale = ppm / (s.k1 + s.k2);
                 const vector_offset = 60 * s.zoom;
 
                 drawVector(startX + vector_offset, massY_px, Fg * vector_scale, '#ef4444', 'Fg');
-                drawVector(startX + vector_offset, massY_px, -Fe_total * vector_scale, '#22c55e', 'Fₖ₂');
-
-                drawVector(startX + vector_offset, junctionY_px, Fe_total * vector_scale, '#f97316', 'Fₖ₁↓');
-                drawVector(startX + vector_offset, junctionY_px, -Fe_total * vector_scale, '#22c55e', 'Fₖ₂↑');
+                drawVector(startX + vector_offset, massY_px, -Fe_total * vector_scale, '#22c55e', 'Fₖ,eq');
             }
         }
 
@@ -736,17 +772,20 @@
             if(s.showNaturalLength) {
                 drawDashedLine(0, START_Y + L0_total * ppm, width, START_Y + L0_total * ppm, '#06b6d4', 'L₀ Total');
             }
+            
+            const elongation = s.position - L0_total;
+            const Fg = s.mass * s.gravity;
+            const Fk1 = s.k1 * elongation;
+            const Fk2 = s.k2 * elongation;
+            s.forceValues = { Fg: Fg, 'Fₖ₁': -Fk1, 'Fₖ₂': -Fk2 };
+
             if (s.showForces) {
-                const Fg = s.mass * s.gravity;
-                const elongation = s.position - L0_total;
-                const Fk1 = s.k1 * elongation;
-                const Fk2 = s.k2 * elongation;
                 const vector_scale = ppm / (s.k1 + s.k2);
                 const vector_offset = 60 * s.zoom;
                 
                 drawVector(width/2 + vector_offset, massY_px, Fg * vector_scale, '#ef4444', 'Fg');
                 drawVector(width/2 - vector_offset, massY_px, -Fk1 * vector_scale, '#22c55e', 'Fₖ₁');
-                drawVector(width/2 - vector_offset + 20 * s.zoom, massY_px, -Fk2 * vector_scale, '#f97316', 'Fₖ₂');
+                drawVector(width/2 - vector_offset + 40 * s.zoom, massY_px, -Fk2 * vector_scale, '#f97316', 'Fₖ₂');
             }
         }
 
@@ -875,6 +914,25 @@
             y: ${state.position.toFixed(2)}m, v: ${state.velocity.toFixed(2)}m/s<br>
             Elongación (x): ${elongation.toFixed(2)}m`;
         }
+
+        function updateForceValuesDisplay() {
+            const colors = {
+                'Fg': '#ef4444',
+                'Fₖ,eq': '#22c55e',
+                'Fₖ₁': '#22c55e',
+                'Fₖ₂': '#f97316',
+            };
+            const forces = state.forceValues;
+            let html = '';
+
+            for (const [key, value] of Object.entries(forces)) {
+                if (key === 'Fg') continue; // Omitir la fuerza gravitatoria
+                const sign = value >= 0 ? '+' : '';
+                const color = colors[key] || '#d1d5db';
+                html += `<span class="mr-4" style="color: ${color};">${key}: ${sign}${value.toFixed(2)} N</span>`;
+            }
+            forceValuesDisplay.innerHTML = html;
+        }
         
         function drawChronometer() {
             chronoTimeEl.textContent = `${state.chronometerTime.toFixed(1)}s`;
@@ -951,6 +1009,7 @@
             chronoResetBtn = document.getElementById('chrono-reset-btn');
             iconPause = document.getElementById('icon-pause');
             iconPlay = document.getElementById('icon-play');
+            forceValuesDisplay = document.getElementById('force-values-display');
 
             resizeCanvas();
             initEnergyChart();
