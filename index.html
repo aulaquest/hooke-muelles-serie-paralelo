@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Muelles Múltiples (Serie y Paralelo)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #111827;
+            color: #d1d5db;
+            cursor: default;
+        }
+        .control-group {
+            background-color: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #9ca3af;
+        }
+        .value-display {
+            font-weight: 600;
+            color: #e5e7eb;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 6px;
+            background: #374151;
+            border-radius: 3px;
+            outline: none;
+            opacity: 0.7;
+            transition: opacity .2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .info-box {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: rgba(31, 41, 55, 0.8);
+            padding: 6px 10px;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.75rem;
+            line-height: 1.4;
+            border: 1px solid #4b5563;
+            pointer-events: none;
+            z-index: 20;
+        }
+        .chronometer-box {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: rgba(31, 41, 55, 0.8);
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #4b5563;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            z-index: 20;
+        }
+        .chronometer-box button {
+            background: transparent;
+            border: none;
+            color: #d1d5db;
+            cursor: pointer;
+        }
+        .chronometer-box button:hover {
+            color: #3b82f6;
+        }
+        .main-container {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+            position: relative;
+        }
+        .simulation-column {
+            flex-grow: 1;
+            position: relative;
+        }
+        .controls-column {
+            width: 384px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            background-color: #1f2937;
+            border-left: 1px solid #374151;
+        }
+        .controls-scroll-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 1.5rem; /* Padding uniforme */
+        }
+        #simulation-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: default;
+        }
+        #simulation-canvas.grabbing { cursor: grabbing; }
+        #simulation-canvas.move-cursor { cursor: move; }
+        
+        #energy-chart-overlay {
+            position: absolute;
+            width: 420px;
+            height: 220px;
+            background-color: rgba(31, 41, 55, 0.85);
+            border: 1px solid #4b5563;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            z-index: 30;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            bottom: 15px;
+            left: 15px;
+        }
+        #energy-chart-overlay.hidden {
+            display: none;
+        }
+        #energy-chart-overlay .chart-header {
+            margin-bottom: 0.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e5e7eb;
+            text-align: center;
+            padding: 4px;
+            cursor: move;
+            user-select: none;
+        }
+        #energy-chart-container {
+            flex-grow: 1;
+            position: relative;
+        }
+        .attribution {
+            padding: 1rem 1.5rem;
+            text-align: center;
+            font-size: 0.875rem;
+            color: #6b7280;
+        }
+        .attribution a {
+            color: #9ca3af;
+            text-decoration: none;
+        }
+        .attribution a:hover {
+            text-decoration: underline;
+        }
+        .config-btn {
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .config-btn.active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .config-btn:not(.active) {
+            background-color: #374151;
+            color: #d1d5db;
+        }
+
+        /* --- ESTILOS PARA MÓVIL Y PANTALLAS PEQUEÑAS --- */
+        @media (max-width: 768px) {
+            html, body {
+                height: 100vh;
+                overflow: hidden;
+            }
+            .main-container {
+                flex-direction: column;
+                height: 100%;
+            }
+            .simulation-column {
+                height: 60vh; /* Ajustado para dar más espacio a la simulación */
+                flex-shrink: 0;
+            }
+            .controls-column {
+                width: 100%;
+                height: 40vh; /* Ajustado para ocupar el resto del espacio */
+                border-left: none;
+                border-top: 2px solid #374151;
+            }
+            #energy-chart-overlay {
+                width: 90%;
+                max-width: 320px;
+                height: 180px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <div class="simulation-column">
+            <canvas id="simulation-canvas"></canvas>
+            <div id="info-display" class="info-box"></div>
+            <div id="chronometer-container" class="chronometer-box hidden">
+                <div id="chronometer-time" class="text-white text-md font-semibold">0.0s</div>
+                <button id="chrono-pause-play-btn" title="Pausar/Reanudar">
+                    <svg id="icon-play" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M8 6.82v10.36c0 .79.87 1.27 1.54.84l8.14-5.18c.62-.39.62-1.29 0-1.69L9.54 5.98C8.87 5.55 8 6.03 8 6.82z"></path></svg>
+                    <svg id="icon-pause" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 hidden"><path d="M6 5h2v14H6V5zm10 0h2v14h-2V5z"></path></svg>
+                </button>
+                <button id="chrono-reset-btn" title="Reiniciar Cronómetro">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path d="M12 4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6zm-1-8v4h2v-4h-2z"></path></svg>
+                </button>
+            </div>
+            <!-- Controles de Zoom -->
+            <div id="zoom-controls" class="absolute bottom-4 right-4 flex flex-col space-y-2 z-20">
+                <button id="zoom-in-btn" title="Acercar" class="w-12 h-12 bg-gray-700/80 backdrop-blur-sm border border-gray-600/50 hover:bg-gray-600/90 rounded-full flex items-center justify-center text-white font-bold transition-colors shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                    </svg>
+                </button>
+                <button id="zoom-out-btn" title="Alejar" class="w-12 h-12 bg-gray-700/80 backdrop-blur-sm border border-gray-600/50 hover:bg-gray-600/90 rounded-full flex items-center justify-center text-white font-bold transition-colors shadow-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M18 12H6" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="controls-column">
+            <div class="controls-scroll-area">
+                <div id="controls-tab1">
+                    <!-- Controles de Simulación movidos al principio -->
+                    <div class="control-group">
+                        <button id="start-pause-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                            Empezar
+                        </button>
+                        <button id="reset-simulation-btn" class="w-full mt-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition-colors">
+                            Reiniciar
+                        </button>
+                    </div>
+
+                    <div class="control-group">
+                        <div class="flex justify-center space-x-2">
+                            <button id="series-btn" class="config-btn w-1/2 py-2 px-4 rounded-md font-semibold">Serie</button>
+                            <button id="parallel-btn" class="config-btn w-1/2 py-2 px-4 rounded-md font-semibold">Paralelo</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                         <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+                              <div>
+                                  <label class="control-label mb-2" for="k1">k₁ <span id="k1-value" class="value-display">50 N/m</span></label>
+                                  <input type="range" id="k1" min="10" max="100" step="1" value="50">
+                              </div>
+                              <div>
+                                  <label class="control-label mb-2" for="k2">k₂ <span id="k2-value" class="value-display">50 N/m</span></label>
+                                  <input type="range" id="k2" min="10" max="100" step="1" value="50">
+                              </div>
+                         </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label class="control-label" for="mass">Masa (m) <span id="mass-value" class="value-display">1.0 kg</span></label>
+                        <input type="range" id="mass" min="0.1" max="5" step="0.1" value="1.0" class="w-full mt-2">
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label" for="l0">Longitud Natural (L₀) <span id="l0-value" class="value-display">0.5 m</span></label>
+                        <input type="range" id="l0" min="0.2" max="1.0" step="0.05" value="0.5" class="w-full mt-2">
+                    </div>
+
+                    <div class="control-group">
+                        <label class="control-label" for="gravity">Planeta (Gravedad)</label>
+                        <select id="gravity" class="w-full mt-2 bg-gray-700 border border-gray-600 rounded-md p-2 text-white">
+                            <option value="9.81">Tierra</option>
+                            <option value="1.62">Luna</option>
+                            <option value="3.71">Marte</option>
+                            <option value="24.79">Júpiter</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label class="control-label" for="damping">Amortiguamiento <span id="damping-value" class="value-display">Bajo</span></label>
+                        <input type="range" id="damping" min="1" max="50" step="1" value="5" class="w-full mt-2">
+                    </div>
+
+                    <div class="control-group">
+                        <h3 class="text-lg font-semibold mb-2 text-white">Visualización</h3>
+                        <div class="space-y-2">
+                            <label class="flex items-center"><input type="checkbox" id="show-forces" class="form-checkbox" checked> <span class="ml-2">Vectores de Fuerza</span></label>
+                            <label class="flex items-center"><input type="checkbox" id="show-equilibrium-pos" class="form-checkbox" checked> <span class="ml-2">Posición de equilibrio</span></label>
+                            <label class="flex items-center"><input type="checkbox" id="show-natural-length" class="form-checkbox"> <span class="ml-2">Longitud Natural del Sistema</span></label>
+                            <label class="flex items-center"><input type="checkbox" id="show-ruler" class="form-checkbox"> <span class="ml-2">Regla</span></label>
+                            <label class="flex items-center"><input type="checkbox" id="show-energy-graph" class="form-checkbox"> <span class="ml-2">Gráfica de Energías</span></label>
+                            <label class="flex items-center"><input type="checkbox" id="show-chronometer" class="form-checkbox"> <span class="ml-2">Cronómetro</span></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="attribution">
+                <a href="https://aulaquest.com" target="_blank" rel="noopener noreferrer">Simulación por aulaquest.com</a>
+            </div>
+        </div>
+        
+        <div id="energy-chart-overlay" class="hidden">
+            <h3 class="chart-header">Gráfica de Energías (J)</h3>
+            <div id="energy-chart-container">
+                <canvas id="energy-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- SETUP ---
+        const canvas = document.getElementById('simulation-canvas');
+        const ctx = canvas.getContext('2d');
+        const energyChartCanvas = document.getElementById('energy-chart');
+        let energyChart;
+
+        let parent = canvas.parentElement;
+        let width, height;
+        const dpr = window.devicePixelRatio || 1;
+
+        function resizeCanvas() {
+            parent = canvas.parentElement;
+            width = parent.clientWidth;
+            height = parent.clientHeight;
+            
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            canvas.width = width * dpr;
+            canvas.height = height * dpr;
+            ctx.scale(dpr, dpr);
+            canvas.style.width = `${width}px`;
+            canvas.style.height = `${height}px`;
+
+            state.pixelsPerMeter = height / 4;
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- STATE MANAGEMENT ---
+        const START_Y = 50;
+
+        const state = {
+            mass: 1.0, 
+            k1: 50, k2: 50,
+            position: 0, velocity: 0, acceleration: 0,
+            gravity: 9.81, l0: 0.5, damping: 0.005,
+            configMode: 'series',
+            simulationState: 'initial',
+            isDraggingMass: false,
+            massDrag: { startY: 0, startPos: 0 },
+            showForces: true, showEquilibrium: true, showNaturalLength: false, showEnergyGraph: false, showChronometer: false, showRuler: false,
+            pixelsPerMeter: 150,
+            zoom: 1.0, // Nivel de zoom manual
+            energies: { kinetic: 0, potentialG: 0, potentialE: 0, total: 0 },
+            potentialGRefY: 0,
+            chronometerTime: 0,
+            chronometerManualPause: false,
+            ruler: { x: 100, y: 120, width: 60, height: 400, isDragging: false, offsetX: 0, offsetY: 0 },
+        };
+
+        // --- DOM ELEMENTS ---
+        let startPauseBtn, resetSimulationBtn, energyChartOverlay,
+            seriesBtn, parallelBtn, chronoContainer, chronoTimeEl,
+            chronoPausePlayBtn, chronoResetBtn, iconPause, iconPlay;
+        
+        function initEnergyChart() {
+            const chartCtx = energyChartCanvas.getContext('2d');
+            Chart.defaults.color = '#d1d5db';
+            Chart.defaults.font.family = "'Inter', sans-serif";
+            
+            energyChart = new Chart(chartCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Cinética', 'Pot. Elástica', 'Pot. Gravit.', 'Total'],
+                    datasets: [{
+                        label: 'Energía del Sistema (J)',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['rgba(59, 130, 246, 0.7)','rgba(249, 115, 22, 0.7)','rgba(34, 197, 94, 0.7)','rgba(217, 70, 239, 0.7)'],
+                        borderColor: ['rgba(59, 130, 246, 1)','rgba(249, 115, 22, 1)','rgba(34, 197, 94, 1)','rgba(217, 70, 239, 1)'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { x: { grid: { color: '#374151' }, ticks: { color: '#9ca3af' } }, y: { grid: { display: false }, ticks: { color: '#d1d5db' } } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            animation: false,
+                            callbacks: {
+                                label: (context) => `${context.dataset.label || ''}: ${context.parsed.x !== null ? context.parsed.x.toFixed(2) + ' J' : ''}`
+                            }
+                        }
+                    },
+                    animation: false,
+                }
+            });
+        }
+        
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            startPauseBtn.addEventListener('click', handleStartPause);
+            resetSimulationBtn.addEventListener('click', fullReset);
+
+            document.getElementById('mass').addEventListener('input', (e) => { state.mass = parseFloat(e.target.value); document.getElementById('mass-value').textContent = `${state.mass.toFixed(1)} kg`; resetSimulation(); });
+            document.getElementById('k1').addEventListener('input', (e) => { state.k1 = parseFloat(e.target.value); document.getElementById('k1-value').textContent = `${state.k1.toFixed(0)} N/m`; resetSimulation(); });
+            document.getElementById('k2').addEventListener('input', (e) => { state.k2 = parseFloat(e.target.value); document.getElementById('k2-value').textContent = `${state.k2.toFixed(0)} N/m`; resetSimulation(); });
+            document.getElementById('l0').addEventListener('input', (e) => { state.l0 = parseFloat(e.target.value); document.getElementById('l0-value').textContent = `${state.l0.toFixed(2)} m`; resetSimulation(); });
+            document.getElementById('gravity').addEventListener('input', (e) => { state.gravity = parseFloat(e.target.value); resetSimulation(); });
+            document.getElementById('damping').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                state.damping = val / 1000;
+                document.getElementById('damping-value').textContent = val < 10 ? 'Bajo' : (val < 30 ? 'Medio' : 'Alto');
+            });
+
+            document.getElementById('show-forces').addEventListener('change', (e) => state.showForces = e.target.checked);
+            document.getElementById('show-equilibrium-pos').addEventListener('change', (e) => state.showEquilibrium = e.target.checked);
+            document.getElementById('show-natural-length').addEventListener('change', (e) => state.showNaturalLength = e.target.checked);
+            document.getElementById('show-ruler').addEventListener('change', (e) => state.showRuler = e.target.checked);
+            document.getElementById('show-energy-graph').addEventListener('change', (e) => {
+                 state.showEnergyGraph = e.target.checked;
+                 energyChartOverlay.classList.toggle('hidden', !e.target.checked);
+            });
+            document.getElementById('show-chronometer').addEventListener('change', (e) => {
+                state.showChronometer = e.target.checked;
+                chronoContainer.classList.toggle('hidden', !e.target.checked);
+            });
+
+            seriesBtn.addEventListener('click', () => setConfigMode('series'));
+            parallelBtn.addEventListener('click', () => setConfigMode('parallel'));
+            
+            chronoPausePlayBtn.addEventListener('click', toggleChronometer);
+            chronoResetBtn.addEventListener('click', resetChronometer);
+
+            // Listeners para el zoom
+            document.getElementById('zoom-in-btn').addEventListener('click', () => { state.zoom *= 1.25; });
+            document.getElementById('zoom-out-btn').addEventListener('click', () => { state.zoom /= 1.25; });
+
+            canvas.addEventListener('mousedown', handleMouseDown);
+            canvas.addEventListener('mousemove', handleMouseMove);
+            canvas.addEventListener('mouseup', handleMouseUp);
+            canvas.addEventListener('mouseleave', handleMouseUp);
+            canvas.addEventListener('touchstart', handleMouseDown, { passive: false });
+            canvas.addEventListener('touchmove', handleMouseMove, { passive: false });
+            canvas.addEventListener('touchend', handleMouseUp);
+
+            setupChartDrag();
+        }
+
+        function setConfigMode(mode) {
+            state.configMode = mode;
+            seriesBtn.classList.toggle('active', mode === 'series');
+            parallelBtn.classList.toggle('active', mode === 'parallel');
+            resetSimulation();
+        }
+        
+        function getEventPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches ? e.touches[0] : e;
+            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        }
+
+        function handleMouseDown(e) {
+            e.preventDefault();
+            const { x, y } = getEventPos(e);
+            
+            const [massX, massY_px] = getMassScreenPos();
+            const massSize = 30 * state.zoom;
+
+            if (Math.abs(x - massX) < massSize && Math.abs(y - massY_px) < massSize) {
+                state.isDraggingMass = true;
+                state.massDrag = { startY: y, startPos: state.position };
+                canvas.classList.add('grabbing');
+                return;
+            }
+
+            if (state.showRuler && x > state.ruler.x && x < state.ruler.x + state.ruler.width && y > state.ruler.y && y < state.ruler.y + state.ruler.height) {
+                state.ruler.isDragging = true;
+                state.ruler.offsetX = x - state.ruler.x;
+                state.ruler.offsetY = y - state.ruler.y;
+                canvas.classList.add('move-cursor');
+                return;
+            }
+        }
+
+        function handleMouseMove(e) {
+            e.preventDefault();
+            const { x, y } = getEventPos(e);
+
+            if (state.isDraggingMass) {
+                const deltaY = y - state.massDrag.startY;
+                const ppm = state.pixelsPerMeter * state.zoom;
+                state.position = state.massDrag.startPos + deltaY / ppm;
+                state.velocity = 0;
+            } else if (state.ruler.isDragging) {
+                state.ruler.x = x - state.ruler.offsetX;
+                state.ruler.y = y - state.ruler.offsetY;
+            }
+        }
+        
+        function handleMouseUp() {
+            if (state.isDraggingMass) {
+                setEnergyChartScale();
+            }
+            state.isDraggingMass = false;
+            state.ruler.isDragging = false;
+            canvas.classList.remove('grabbing', 'move-cursor');
+        }
+        
+        function resetSimulation() {
+            state.simulationState = 'initial';
+            startPauseBtn.textContent = 'Empezar';
+            startPauseBtn.className = 'w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition-colors';
+            
+            state.velocity = state.acceleration = 0;
+
+            const { k_eq, L0_total } = getSystemProperties();
+            state.position = L0_total + (state.mass * state.gravity) / k_eq;
+            state.potentialGRefY = state.position;
+            
+            resetChronometer();
+            updateEnergy();
+            
+            if(energyChart) {
+                energyChart.options.scales.x.max = 1;
+                energyChart.options.scales.x.min = -1;
+            }
+        }
+        
+        function fullReset() {
+            resetSimulation();
+        }
+        
+        function handleStartPause() {
+            if (state.simulationState === 'initial') {
+                state.simulationState = 'running';
+                startPauseBtn.textContent = 'Pausar';
+                startPauseBtn.className = 'w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors';
+                setEnergyChartScale();
+                resetChronometer();
+            } else if (state.simulationState === 'running') {
+                state.simulationState = 'paused';
+                startPauseBtn.textContent = 'Reanudar';
+                startPauseBtn.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors';
+            } else if (state.simulationState === 'paused') {
+                state.simulationState = 'running';
+                startPauseBtn.textContent = 'Pausar';
+                startPauseBtn.className = 'w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded transition-colors';
+            }
+        }
+
+        function resetChronometer() {
+            state.chronometerTime = 0;
+            state.chronometerManualPause = false;
+            iconPause.classList.add('hidden');
+            iconPlay.classList.remove('hidden');
+        }
+
+        function toggleChronometer() {
+            state.chronometerManualPause = !state.chronometerManualPause;
+            iconPause.classList.toggle('hidden', state.chronometerManualPause);
+            iconPlay.classList.toggle('hidden', !state.chronometerManualPause);
+        }
+
+        // --- PHYSICS & ENERGY ---
+        function getSystemProperties() {
+            const { k1, k2, l0, configMode } = state;
+            if (configMode === 'series') {
+                const k_eq = (k1 * k2) / (k1 + k2);
+                const L0_total = l0 * 2;
+                return { k_eq, L0_total };
+            } else { // parallel
+                const k_eq = k1 + k2;
+                const L0_total = l0;
+                return { k_eq, L0_total };
+            }
+        }
+
+        function updateEnergy() {
+            const s = state;
+            const e = s.energies;
+            const { k_eq, L0_total } = getSystemProperties();
+
+            e.kinetic = 0.5 * s.mass * s.velocity**2;
+            e.potentialG = s.mass * s.gravity * -(s.position - s.potentialGRefY);
+            e.potentialE = 0.5 * k_eq * (s.position - L0_total)**2;
+            e.total = e.kinetic + e.potentialG + e.potentialE;
+        }
+
+        function setEnergyChartScale() {
+            if (!energyChart) return;
+            updateEnergy();
+            const e = state.energies;
+            const maxBound = Math.max(e.total, e.potentialE, 1);
+            const minBound = e.potentialG < 0 ? e.potentialG : -maxBound * 0.2;
+            energyChart.options.scales.x.max = maxBound * 1.2;
+            energyChart.options.scales.x.min = minBound * 1.2;
+        }
+
+        function updatePhysics() {
+            if (state.simulationState === 'running' && !state.isDraggingMass) {
+                const s = state;
+                const dt = 1 / 60.0;
+                const { k_eq, L0_total } = getSystemProperties();
+
+                const forceGravity = s.mass * s.gravity;
+                const forceElastic = -k_eq * (s.position - L0_total);
+                const forceDamping = -s.damping * 100 * s.velocity;
+                const totalForce = forceGravity + forceElastic + forceDamping;
+                
+                s.acceleration = totalForce / s.mass;
+                s.velocity += s.acceleration * dt;
+                s.position += s.velocity * dt;
+                
+                // **FIX**: Añadir colisión con el techo
+                if (s.position < 0) {
+                    s.position = 0;
+                    s.velocity *= -0.5; // Rebote inelástico
+                }
+
+                updateEnergy();
+            }
+
+            if (state.simulationState === 'running' && !state.chronometerManualPause) {
+                state.chronometerTime += 1 / 60.0;
+            }
+        }
+
+        // --- DRAWING ---
+        function draw() {
+            ctx.clearRect(0, 0, width, height);
+            drawSimulation();
+            if (state.showEnergyGraph) {
+                updateEnergyGraph();
+            }
+            if (state.showChronometer) {
+                drawChronometer();
+            }
+            updatePhysics();
+            requestAnimationFrame(draw);
+        }
+
+        function drawSimulation() {
+            ctx.fillStyle = '#4b5563';
+            ctx.fillRect(0, START_Y - 10, width, 10);
+
+            if (state.showRuler) {
+                drawRuler();
+            }
+
+            if (state.configMode === 'series') {
+                drawSeries();
+            } else {
+                drawParallel();
+            }
+            updateInfoBox();
+        }
+
+        function drawSeries() {
+            const s = state;
+            const ppm = s.pixelsPerMeter * s.zoom;
+            const startX = width / 2;
+            const { k_eq, L0_total } = getSystemProperties();
+            const massY_px = START_Y + s.position * ppm;
+            
+            const totalElongation = s.position - L0_total;
+            const force = k_eq * totalElongation;
+            const elong1 = force / s.k1;
+            const junctionPos = s.l0 + elong1;
+            const junctionY_px = START_Y + junctionPos * ppm;
+
+            drawSpring(startX, START_Y, junctionY_px - START_Y, 15, 15 * s.zoom);
+            drawSpring(startX, junctionY_px, massY_px - junctionY_px, 15, 15 * s.zoom);
+            drawMass(startX, massY_px, s.mass);
+
+            if (s.showEquilibrium) {
+                const eqPos = L0_total + (s.mass * s.gravity) / k_eq;
+                drawDashedLine(0, START_Y + eqPos * ppm, width, START_Y + eqPos * ppm, '#22c55e', 'Eq');
+            }
+            if(s.showNaturalLength) {
+                drawDashedLine(0, START_Y + L0_total * ppm, width, START_Y + L0_total * ppm, '#06b6d4', 'L₀ Total');
+            }
+            if (s.showForces) {
+                const Fg = s.mass * s.gravity;
+                const Fe_total = k_eq * totalElongation;
+                const vector_scale = ppm / (s.k1 + s.k2);
+                const vector_offset = 60 * s.zoom;
+
+                drawVector(startX + vector_offset, massY_px, Fg * vector_scale, '#ef4444', 'Fg');
+                drawVector(startX + vector_offset, massY_px, -Fe_total * vector_scale, '#22c55e', 'Fₖ₂');
+
+                drawVector(startX + vector_offset, junctionY_px, Fe_total * vector_scale, '#f97316', 'Fₖ₁↓');
+                drawVector(startX + vector_offset, junctionY_px, -Fe_total * vector_scale, '#22c55e', 'Fₖ₂↑');
+            }
+        }
+
+        function drawParallel() {
+            const s = state;
+            const ppm = s.pixelsPerMeter * s.zoom;
+            const spring_separation = 40 * s.zoom;
+            const startX1 = width / 2 - spring_separation;
+            const startX2 = width / 2 + spring_separation;
+            const massY_px = START_Y + s.position * ppm;
+            const { k_eq, L0_total } = getSystemProperties();
+            
+            drawSpring(startX1, START_Y, massY_px - START_Y, 15, 15 * s.zoom);
+            drawSpring(startX2, START_Y, massY_px - START_Y, 15, 15 * s.zoom);
+            
+            drawMass(width/2, massY_px, s.mass, true);
+
+            if (s.showEquilibrium) {
+                const eqPos = L0_total + (s.mass * s.gravity) / k_eq;
+                drawDashedLine(0, START_Y + eqPos * ppm, width, START_Y + eqPos * ppm, '#22c55e', 'Eq');
+            }
+            if(s.showNaturalLength) {
+                drawDashedLine(0, START_Y + L0_total * ppm, width, START_Y + L0_total * ppm, '#06b6d4', 'L₀ Total');
+            }
+            if (s.showForces) {
+                const Fg = s.mass * s.gravity;
+                const elongation = s.position - L0_total;
+                const Fk1 = s.k1 * elongation;
+                const Fk2 = s.k2 * elongation;
+                const vector_scale = ppm / (s.k1 + s.k2);
+                const vector_offset = 60 * s.zoom;
+                
+                drawVector(width/2 + vector_offset, massY_px, Fg * vector_scale, '#ef4444', 'Fg');
+                drawVector(width/2 - vector_offset, massY_px, -Fk1 * vector_scale, '#22c55e', 'Fₖ₁');
+                drawVector(width/2 - vector_offset + 20 * s.zoom, massY_px, -Fk2 * vector_scale, '#f97316', 'Fₖ₂');
+            }
+        }
+
+        function getMassScreenPos() {
+            const ppm = state.pixelsPerMeter * state.zoom;
+            const y = START_Y + state.position * ppm;
+            const x = width / 2;
+            return [x, y];
+        }
+
+        function drawSpring(x, y, length, coils, springWidth) {
+            if (length <= 10) return;
+            const step = length / coils;
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+            for (let i = 0; i < coils -1; i++) {
+                ctx.lineTo(x + springWidth * ((i % 2 === 0) ? 1 : -1), y + (i + 0.5) * step);
+            }
+            ctx.lineTo(x, y + length);
+            ctx.strokeStyle = '#9ca3af';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        function drawMass(x, y, mass, hasPlatform = false) {
+            const s = state;
+            const size = (20 + Math.sqrt(mass) * 8) * s.zoom;
+            if (hasPlatform) {
+                const platformWidth = 100 * s.zoom;
+                ctx.fillStyle = '#6b7280';
+                ctx.fillRect(x - platformWidth / 2, y-2, platformWidth, 4);
+            }
+            ctx.beginPath();
+            ctx.rect(x - size / 2, y, size, size);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fill();
+            ctx.strokeStyle = '#1e40af';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+        
+        function drawVector(startX, startY, value, color, label) {
+            const arrowLength = value;
+            const endY = startY + arrowLength;
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(startX, endY);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+
+            const headlen = 10;
+            ctx.beginPath();
+            ctx.moveTo(startX, endY);
+            ctx.lineTo(startX - headlen / 2, endY - Math.sign(arrowLength) * headlen);
+            ctx.lineTo(startX + headlen / 2, endY - Math.sign(arrowLength) * headlen);
+            ctx.closePath();
+            ctx.fillStyle = color;
+            ctx.fill();
+
+            ctx.fillStyle = color;
+            ctx.font = '14px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, startX + 15, startY + arrowLength / 2);
+        }
+        
+        function drawDashedLine(x1, y1, x2, y2, color, label) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.setLineDash([5, 5]);
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+            ctx.restore();
+            ctx.fillStyle = color;
+            ctx.font = '12px Inter';
+            ctx.textAlign = 'left';
+            ctx.fillText(label, 10, y1 - 5);
+        }
+
+        function drawRuler() {
+            const r = state.ruler;
+            const ppm = state.pixelsPerMeter * state.zoom;
+            ctx.save();
+            ctx.fillStyle = 'rgba(229, 231, 235, 0.2)';
+            ctx.strokeStyle = 'rgba(156, 163, 175, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.fillRect(r.x, r.y, r.width, r.height);
+            ctx.strokeRect(r.x, r.y, r.width, r.height);
+
+            ctx.strokeStyle = '#d1d5db';
+            ctx.fillStyle = '#d1d5db';
+            ctx.font = '10px Inter';
+            ctx.textAlign = 'right';
+
+            const minPixelStep = 20;
+            const minMeterStep = minPixelStep / ppm;
+            const niceSteps = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5];
+            const meterStep = niceSteps.find(step => (step * ppm) >= minPixelStep) || 5;
+
+            const rulerStartInMeters = (r.y - START_Y) / ppm;
+            const firstTickInMeters = Math.ceil(rulerStartInMeters / meterStep) * meterStep;
+
+            for (let m = firstTickInMeters; ; m += meterStep) {
+                const y = START_Y + m * ppm;
+                if (y > r.y + r.height) break;
+                if (y < r.y) continue;
+                
+                const tickLength = 25;
+                const label = m < 1 ? `${(m*100).toFixed(0)} cm` : `${m.toFixed(1)} m`;
+                ctx.fillText(label, r.x + r.width - tickLength - 5, y + 3);
+                ctx.beginPath();
+                ctx.moveTo(r.x + r.width, y);
+                ctx.lineTo(r.x + r.width - tickLength, y);
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function updateInfoBox() {
+            const { L0_total } = getSystemProperties();
+            const elongation = state.position - L0_total;
+            document.getElementById('info-display').innerHTML = `<b>Masa:</b><br>
+            y: ${state.position.toFixed(2)}m, v: ${state.velocity.toFixed(2)}m/s<br>
+            Elongación (x): ${elongation.toFixed(2)}m`;
+        }
+        
+        function drawChronometer() {
+            chronoTimeEl.textContent = `${state.chronometerTime.toFixed(1)}s`;
+        }
+
+        function updateEnergyGraph() {
+            if (!energyChart) return;
+            const e = state.energies;
+            energyChart.data.datasets[0].data[0] = e.kinetic;
+            energyChart.data.datasets[0].data[1] = e.potentialE;
+            energyChart.data.datasets[0].data[2] = e.potentialG;
+            energyChart.data.datasets[0].data[3] = e.total;
+            energyChart.update('none');
+        }
+
+        function setupChartDrag() {
+            const chartHeader = document.querySelector('.chart-header');
+            let isDragging = false;
+            let offsetX, offsetY;
+
+            function onMouseDown(e) {
+                isDragging = true;
+                const eventPos = e.touches ? e.touches[0] : e;
+                const rect = energyChartOverlay.getBoundingClientRect();
+                offsetX = eventPos.clientX - rect.left;
+                offsetY = eventPos.clientY - rect.top;
+                
+                window.addEventListener('mousemove', onMouseMove);
+                window.addEventListener('mouseup', onMouseUp);
+                window.addEventListener('touchmove', onMouseMove, { passive: false });
+                window.addEventListener('touchend', onMouseUp);
+            }
+
+            function onMouseMove(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                const eventPos = e.touches ? e.touches[0] : e;
+                let newLeft = eventPos.clientX - offsetX;
+                let newTop = eventPos.clientY - offsetY;
+
+                const parentRect = document.body.getBoundingClientRect();
+                newLeft = Math.max(0, Math.min(newLeft, parentRect.width - energyChartOverlay.offsetWidth));
+                newTop = Math.max(0, Math.min(newTop, parentRect.height - energyChartOverlay.offsetHeight));
+
+                energyChartOverlay.style.left = `${newLeft}px`;
+                energyChartOverlay.style.top = `${newTop}px`;
+                energyChartOverlay.style.bottom = 'auto';
+                energyChartOverlay.style.right = 'auto';
+            }
+
+            function onMouseUp() {
+                isDragging = false;
+                window.removeEventListener('mousemove', onMouseMove);
+                window.removeEventListener('mouseup', onMouseUp);
+                window.removeEventListener('touchmove', onMouseMove);
+                window.removeEventListener('touchend', onMouseUp);
+            }
+
+            chartHeader.addEventListener('mousedown', onMouseDown);
+            chartHeader.addEventListener('touchstart', onMouseDown, { passive: false });
+        }
+
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            startPauseBtn = document.getElementById('start-pause-btn');
+            resetSimulationBtn = document.getElementById('reset-simulation-btn');
+            energyChartOverlay = document.getElementById('energy-chart-overlay');
+            seriesBtn = document.getElementById('series-btn');
+            parallelBtn = document.getElementById('parallel-btn');
+            chronoContainer = document.getElementById('chronometer-container');
+            chronoTimeEl = document.getElementById('chronometer-time');
+            chronoPausePlayBtn = document.getElementById('chrono-pause-play-btn');
+            chronoResetBtn = document.getElementById('chrono-reset-btn');
+            iconPause = document.getElementById('icon-pause');
+            iconPlay = document.getElementById('icon-play');
+
+            resizeCanvas();
+            initEnergyChart();
+            setupEventListeners();
+            setConfigMode('series');
+            fullReset();
+            
+            if (state.showEnergyGraph) {
+                energyChartOverlay.classList.remove('hidden');
+            }
+
+            draw();
+        });
+
+    </script>
+</body>
+</html>
